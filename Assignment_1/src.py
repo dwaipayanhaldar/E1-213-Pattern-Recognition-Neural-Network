@@ -3,6 +3,8 @@ import scipy as sp
 import matplotlib.pyplot as plt
 import os
 from cvxopt import matrix, solvers
+np.random.seed(42)
+
 """
 Basic Utility functions
 """
@@ -188,9 +190,205 @@ class regression():
         return w
 
 
+#Problem 3.5
+class logistic_regression():
+
+    def __init__(self, data):
+        data = data[data[:,-1] != 0]
+        self.X = data[:,:-1]
+        self.y = data[:,-1]
+        self.y[self.y == 1] = 0
+        self.y[self.y == 2] = 1
+        self.w = None
+    
+    def sigmoid(self, x):
+        return 1/(1+np.exp(-x))
+    
+    def loss(self, W, X, y, laambda):
+        """Calculate the value of the loss function"""
+        N = X.shape[0]
+        H = self.sigmoid(X@W)
+        cross_entropy = -(1/N)*np.sum(y*np.log(H+1e-12) + (1-y)*np.log(1-H+1e-12))
+        regularization = (laambda/(2*N))*np.linalg.norm(W)**2
+        return cross_entropy + regularization
+
+    
+    def lipschitz_constant(self, laambda):
+        """Compute the Lipschitz smoothness constant of the gradient."""
+        X = self.X
+        if X.ndim == 1:
+            X = add_bias_1d(X)
+        else:
+            X = add_bias(X)
+        N = X.shape[0]
+
+        sigma_max_sq = np.linalg.norm(X, ord=2) ** 2
+        L = sigma_max_sq / (4 * N) + laambda / N
+        return L
+
+    def logistic_regression(self, alpha, laambda, n_iters = 2000):
+        """Vectorized Logistic Regression with l2 regularization"""
+        X = self.X
+        y = self.y
+
+        if X.ndim == 1:
+            X = add_bias_1d(X)
+        else:
+            X = add_bias(X)
+        
+        y = y.reshape(-1, 1)
+        W = np.zeros((X.shape[1], 1))
+        N = X.shape[0]
+        loss_track = []
+
+        for _ in range(n_iters):
+            gradient = (1 / N) * (X.T @ (self.sigmoid(X@W) - y) + laambda*W)
+            W = W - alpha * gradient
+            loss = self.loss(W,X,y,laambda)
+            loss_track.append(loss)
+
+        self.w = W.reshape(W.shape[0],)
+
+        plt.figure(figsize=(10,6))
+        plt.title
+        plt.plot(np.arange(n_iters), loss_track)
+        plt.xlabel("Iterations")
+        plt.ylabel("Loss")
+        plt.show()
+
+        return self.w, loss_track
+
+
+#Problem 3.6, 3.7 and 3.8
+class gaussian_mixture():
+
+    def __init__(self, data):
+        self.X = data[:,:-1]
+        self.X1 = data[:,:2]
+    
+    def marginal_log_likelihood(self, alpha, mu, sigma):
+        """Calculates the marginal log likelihood"""
+        K = alpha.shape[0]
+        P = np.column_stack([
+            alpha[k] * sp.stats.multivariate_normal.pdf(self.X, mean=mu[k], cov=sigma[k])
+            for k in range(K)
+        ])
+        mixture = P.sum(axis=1)            
+        mll = np.sum(np.log(mixture))
+        return mll
+
+    def expectation_maximization(self, K, iter, crash = False):
+        """Updates the parameters. Runs the whole EM algorithm"""
+        #initialization
+        N = self.X.shape[0]
+        alpha = (1/K)*np.ones(K)
+        idx = np.random.randint(0,N, size=(K))
+        mu = self.X[idx]
+        data_var = np.mean(np.var(self.X, axis=0))
+        f = np.random.rand(K,)*data_var
+        sigma = np.array([s*np.eye(self.X.shape[1]) for s in f])
+
+        intial_ll = self.marginal_log_likelihood(alpha, mu, sigma)
+        ll_after = []
+
+        for i in range(iter):
+            #update the parameters
+            R = np.column_stack([alpha[k] * sp.stats.multivariate_normal.pdf(self.X, mean=mu[k], cov=sigma[k]) for k in range(K)])
+            R /= R.sum(axis=1, keepdims=True)   
+
+            # Update Alpha
+            alpha_modified = R.sum(axis=0) / N  
+
+            # Update mu
+            mu_modified = np.zeros_like(mu)
+            for k in range(K):
+                mu_modified[k] = R[:, k] @ self.X / R[:, k].sum()
+
+            #Update sigma
+            sigma_modified = np.zeros_like(sigma)
+            for k in range(K):
+                diff = self.X - mu[k]                                  
+                sigma_modified[k] = (R[:, k].reshape(-1,1) * diff).T @ diff / R[:, k].sum()
+            
+            if crash:
+                crash_idx = np.random.randint(0,K)
+                sigma_modified[crash_idx] = np.zeros((self.X.shape[1],self.X.shape[1]))
+
+            alpha = alpha_modified
+            mu = mu_modified
+            sigma = sigma_modified
+
+            ll_after.append(self.marginal_log_likelihood(alpha, mu, sigma))
+
+        return intial_ll, ll_after, alpha, mu, sigma
+    
+    def decision_boundary(self, K=3, n_iters=10):
+        """Makes the contour of optimal decision boundary"""
+        X = self.X1                        
+        N, D = X.shape
+
+        # Run EM directly on 2D data (self.X1, not self.X)
+        alpha = (1/K)*np.ones(K)
+        idx = np.random.randint(0, N, size=K)
+        mu = X[idx].copy()
+        data_var = np.mean(np.var(X, axis=0))
+        f = np.random.rand(K,) * data_var
+        sigma = np.array([s*np.eye(D) for s in f])
+        for _ in range(n_iters):
+            R = np.column_stack([
+                alpha[k] * sp.stats.multivariate_normal.pdf(X, mean=mu[k], cov=sigma[k])
+                for k in range(K)
+            ])
+            R /= R.sum(axis=1, keepdims=True)
+            alpha = R.sum(axis=0) / N
+            mu_new = np.zeros_like(mu)
+            for k in range(K):
+                mu_new[k] = R[:, k] @ X / R[:, k].sum()
+            sigma_new = np.zeros((K, D, D))
+            for k in range(K):
+                diff = X - mu[k]
+                sigma_new[k] = (R[:, k].reshape(-1,1) * diff).T @ diff / R[:, k].sum()
+            mu, sigma = mu_new, sigma_new
+
+        # Dense grid over 2D space
+        x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+        y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+        xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300),
+                             np.linspace(y_min, y_max, 300))
+        grid = np.c_[xx.ravel(), yy.ravel()]
+
+        # Bayes optimal: argmax_k P(k|x) over grid
+        P_grid = np.column_stack([
+            alpha[k] * sp.stats.multivariate_normal.pdf(grid, mean=mu[k], cov=sigma[k])
+            for k in range(K)
+        ])
+        labels = P_grid.argmax(axis=1).reshape(xx.shape)
+
+        colors = plt.cm.tab10(np.linspace(0, 0.3, K))
+
+        plt.figure(figsize=(10, 8))
+        plt.contourf(xx, yy, labels, alpha=0.25, cmap='tab10')
+        plt.scatter(X[:, 0], X[:, 1], s=1, alpha=0.2, c='gray')
+
+        # Contour lines of each learned Gaussian covariance
+        for k in range(K):
+            Z_k = sp.stats.multivariate_normal.pdf(
+                grid, mean=mu[k], cov=sigma[k]).reshape(xx.shape)
+            plt.contour(xx, yy, Z_k, levels=4, colors=[colors[k]], linewidths=1.5)
+            plt.scatter(*mu[k], marker='x', s=150, linewidths=2,
+                        color=colors[k], zorder=5, label=f'Mean {k}')
+
+        plt.xlabel('Feature 1')
+        plt.ylabel('Feature 2')
+        plt.title(f'GMM Decision Boundaries (K={K}) with Gaussian Contours')
+        plt.legend()
+        plt.show()
+
+        return None
+        
 
 if __name__ == "__main__":
-    data = load_data('dataset_2.csv')
+    data = load_data('dataset_3.csv')
     # X = data[:500,0]
     # y = data[:500,1]
     # y_binary = np.where(y>=np.median(y),1,-1)
@@ -201,9 +399,21 @@ if __name__ == "__main__":
 
     # print(mu)
 
-    model = regression(data)
+    model = logistic_regression(data)
+    L = model.lipschitz_constant(laambda=0.01)
+    print(f"Lipschitz constant L = {L:.4f}")
+    print(f"Max safe learning rate alpha < {1/L:.6f}")
 
-    print("The weights are:", model.ordinary_least_squares())
+    # converges
+    model.logistic_regression(alpha=1/L, laambda=0.01)
+
+    # violates Lipschitz condition → diverging loss curve
+    model.logistic_regression(alpha=10/L, laambda=0.01)
+
+    # initial_ll, modified_ll = model.expectation_maximization(4,10)
+    # print(initial_ll, modified_ll)
+    
+    # model.decision_boundary()
 
 
 
