@@ -138,8 +138,8 @@ class regression():
         else: 
             X = add_bias(X)
         Y = X.T @ y
-        self.w = np.linalg.solve(X.T@X, Y)
-        return self.w
+        self.w = np.linalg.inv(X.T@X)@Y
+        return self.w, np.linalg.cond(X.T@X)
     
     def l2_regression(self, lambdaa):
         """Solve the L2 regression problem from normal equation"""
@@ -151,7 +151,7 @@ class regression():
             X = add_bias(X)
         Y = X.T @ y
         self.w = np.linalg.inv(X.T @ X + lambdaa * np.eye(X.shape[1])) @ Y
-        return self.w
+        return self.w, np.linalg.cond(X.T @ X + lambdaa * np.eye(X.shape[1]))
     
 
     def l1_regression(self, lambdaa, max_iter=1000, tol=1e-6):
@@ -168,13 +168,14 @@ class regression():
         w = np.zeros(d)
         z = np.sum(X**2, axis=0)
 
+        r = y - X @ w 
+
         for iteration in range(max_iter):
             w_old = w.copy()
 
             for j in range(d):
-                r = y - X @ w + X[:, j] * w[j]
+                rho = X[:, j].T @ (r + X[:, j] * w[j])
 
-                rho = X[:, j].T @ r
                 if rho > lambdaa:
                     w[j] = (rho - lambdaa) / z[j]
                 elif rho < -lambdaa:
@@ -187,7 +188,8 @@ class regression():
                 break
 
         self.w = w
-        return w
+        non_zero = np.count_nonzero(w)/len(w)
+        return self.w, non_zero
 
 
 #Problem 3.5
@@ -250,10 +252,11 @@ class logistic_regression():
         self.w = W.reshape(W.shape[0],)
 
         plt.figure(figsize=(10,6))
-        plt.title
         plt.plot(np.arange(n_iters), loss_track)
         plt.xlabel("Iterations")
         plt.ylabel("Loss")
+        plt.title(f"Loss vs iteration for learning rate {alpha}")
+        plt.grid(True, which='both', linestyle='--', alpha=0.6)
         plt.show()
 
         return self.w, loss_track
@@ -385,7 +388,97 @@ class gaussian_mixture():
         plt.show()
 
         return None
+
+
+#Problem 3.9,3.10,3.11
+class soft_margin_classifier():
+
+    def __init__(self, data):
+        data = data[data[:,-1] != 0]
+        self.X = data[:,:-1]
+        self.y = data[:,-1]
+        self.y[self.y == 1] = -1
+        self.y[self.y == 2] = 1
+        self.Q = np.outer(self.y, self.y) * (self.X @ self.X.T)   
+        self.w = None
+        data_rbf = data[:1000]
+        self.X1 = data_rbf[:,:-1]
+        self.y1 = data_rbf[:,-1]
+        self.y1[self.y1 == 1] = -1
+        self.y1[self.y1 == 2] = 1
+
+    def optimal_mu(self, C):
+        N = len(self.y)
+        P = matrix(self.Q.astype(float))
+        q = matrix(-np.ones(N, dtype=float))
+        G = matrix(np.vstack([-np.eye(N), np.eye(N)]).astype(float))  
+        h = matrix(np.hstack([np.zeros(N), np.ones(N) * C]).astype(float))
+        A = matrix(self.y.astype(float), (1, N), 'd')                
+        b = matrix([0.0])
+
+        solvers.options['show_progress'] = True
+        result = solvers.qp(P, q, G, h, A, b)
+
+        return np.array(result['x']).flatten()
+    
+    def rbf_kernel(self, sigma, X, eval = False):
+        square_norms = np.sum(X**2, axis=1)
+        dist_sq = square_norms[:,None] + square_norms[None,:] - 2*X@X.T
+        K = np.exp(-(dist_sq/sigma**2)) 
+        if eval:
+            evals = np.linalg.eigvals(K)
+            return K, evals
+        else:
+            return K
         
+    def hyperparameter_topography(self, C, sigma):
+        X = self.X
+        y = self.y
+        idx = np.random.randint(0,X.shape[0], size=int(0.8*X.shape[0]))
+        X_train = X[idx]
+        X_val = np.delete(X, idx, axis = 0)
+        y_train = y[idx]
+        y_val = np.delete(y,idx)
+        K = self.rbf_kernel(sigma, X_train)
+        Q = np.outer(y_train, y_train) * K  
+    
+        N = len(y_train)
+        P = matrix(Q.astype(float))
+        q = matrix(-np.ones(N, dtype=float))
+        G = matrix(np.vstack([-np.eye(N), np.eye(N)]).astype(float))  
+        h = matrix(np.hstack([np.zeros(N), np.ones(N) * C]).astype(float))
+        A = matrix(y_train.astype(float), (1, N), 'd')                
+        b = matrix([0.0])
+
+        print(f"Iteration for C = {C}, sigma = {sigma}")
+        solvers.options['show_progress'] = True
+        result = solvers.qp(P, q, G, h, A, b)
+
+        mu = np.array(result['x']).flatten()
+        support_vectors = mu >1e-5
+        no_support = np.sum(support_vectors == True)
+        mu_support = mu[support_vectors]
+        y_support = y_train[support_vectors]
+        X_support = X_train[support_vectors]
+        IP_val = np.vstack([X_support, X_val])
+        K_val = self.rbf_kernel(sigma, IP_val)
+        predicted = np.zeros_like(y_val)
+
+        b = np.mean(y_support - (mu_support*y_support)@K_val[:no_support,:no_support])
+
+        decision = (mu_support * y_support) @ K_val[:no_support, no_support:] + b
+        predicted = np.sign(decision)
+
+        K_train = K_val[:no_support, :no_support]
+        decision_train = (mu_support*y_support) @ K_train + b
+        train_pred = np.sign(decision_train)
+
+        training_accuracy = np.sum(train_pred == y_support)/len(y_support)
+        validation_accuracy = np.sum(predicted == y_val)/len(y_val)
+
+        return training_accuracy, validation_accuracy
+        
+
 
 if __name__ == "__main__":
     data = load_data('dataset_3.csv')
@@ -399,16 +492,18 @@ if __name__ == "__main__":
 
     # print(mu)
 
-    model = logistic_regression(data)
-    L = model.lipschitz_constant(laambda=0.01)
-    print(f"Lipschitz constant L = {L:.4f}")
-    print(f"Max safe learning rate alpha < {1/L:.6f}")
+    # model = logistic_regression(data)
+    # L = model.lipschitz_constant(laambda=0.01)
+    # print(f"Lipschitz constant L = {L:.4f}")
+    # print(f"Max safe learning rate alpha < {1/L:.6f}")
 
-    # converges
-    model.logistic_regression(alpha=1/L, laambda=0.01)
+    # # converges
+    # model.logistic_regression(alpha=1/L, laambda=0.01)
 
-    # violates Lipschitz condition → diverging loss curve
-    model.logistic_regression(alpha=10/L, laambda=0.01)
+    # # violates Lipschitz condition → diverging loss curve
+    # model.logistic_regression(alpha=10/L, laambda=0.01)
+
+
 
     # initial_ll, modified_ll = model.expectation_maximization(4,10)
     # print(initial_ll, modified_ll)
@@ -427,3 +522,6 @@ if __name__ == "__main__":
     # print(weights_normal)
     # print(weights_gradient)
 
+    model = soft_margin_classifier(data)
+    mu_optimal = model.optimal_mu(1)
+    print(mu_optimal[mu_optimal == 1])
