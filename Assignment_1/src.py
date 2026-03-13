@@ -320,7 +320,6 @@ class gaussian_mixture():
             alpha = alpha_modified
             mu = mu_modified
             sigma = sigma_modified
-
             ll_after.append(self.marginal_log_likelihood(alpha, mu, sigma))
 
         return intial_ll, ll_after, alpha, mu, sigma
@@ -479,8 +478,117 @@ class soft_margin_classifier():
         return training_accuracy, validation_accuracy
         
 #Problem 4.12
+class multi_class_logistic_regression():
 
+    def __init__(self, data):
+        self.X = data[:,:-1]
+        self.y = data[:,-1]
+    
+    def sigmoid(self, x):
+        return 1/(1+np.exp(-x))
+    
+    def loss(self, W, X, y, laambda):
+        """Calculate the value of the loss function"""
+        N = X.shape[0]
+        H = self.sigmoid(X@W)
+        cross_entropy = -(1/N)*np.sum(y*np.log(H+1e-12) + (1-y)*np.log(1-H+1e-12))
+        regularization = (laambda/(2*N))*np.linalg.norm(W)**2
+        return cross_entropy + regularization
 
+    def standard_scaler(self, X):
+        mu = np.mean(X, axis= 0)
+        sigma = np.std(X, axis=0)
+        return ((X-mu)/sigma)
+
+    def logistic_regression(self, alpha, laambda, n_iters = 2000, standard_scaling = False):
+        """Vectorized Logistic Regression with l2 regularization"""
+        X = self.X
+        y = self.y
+
+        if standard_scaling:
+            X = self.standard_scaler(X)
+
+        if X.ndim == 1:
+            X = add_bias_1d(X)
+        else:
+            X = add_bias(X)
+        
+        y = y.reshape(-1, 1)
+        W = np.zeros((X.shape[1], 1))
+        N = X.shape[0]
+        loss_track = []
+
+        for n in range(n_iters):
+            gradient = (1 / N) * (X.T @ (self.sigmoid(X@W) - y) + laambda*W)
+            W = W - alpha * gradient
+            loss = self.loss(W,X,y,laambda)
+            loss_track.append(loss)
+
+            if n>0:
+                if np.abs((loss_track[-2] - loss_track[-1])) < 1e-6:
+                    print(f"The regression converged in {n+1} iterations")
+                    break
+        return n+1, loss_track
+
+#Problem 4.13,4.14
+class k_nearest_neighbour():
+
+    def __init__(self, data):
+        self.X = data[:,:-1]
+        self.y = data[:,-1]
+
+    def standard_scaler(self, X):
+        mu = np.mean(X, axis= 0)
+        sigma = np.std(X, axis=0)
+        return mu, sigma
+    
+    def naive_knn(self, K, train_idx, test_idx, standard_scaler = False):
+        """Uses loop for KNN"""
+        X_test = self.X[test_idx]
+        X_train = self.X[train_idx]
+        y_test = self.y[test_idx]
+        y_train = self.y[train_idx]
+
+        if standard_scaler:
+            mu, sigma = self.standard_scaler(X_train)
+            X_train = (X_train - mu)/sigma
+            X_test = (X_test-mu)/sigma
+        
+        predicted = np.zeros_like(y_test)
+        for i,X in enumerate(X_test):
+            distance_track = np.zeros_like(y_train)
+            for j,X_t in enumerate(X_train):
+                distance = np.linalg.norm(X - X_t)
+                distance_track[j] = distance
+            idx_knn = np.argpartition(distance_track, K)[:K]
+            y_predicted = sp.stats.mode(y_train[idx_knn], keepdims=False).mode
+            predicted[i] = y_predicted
+        
+        return predicted, y_test
+
+    def vectorized_knn(self, K, train_idx, test_idx, standard_scaler = False):
+        """Uses vectorized KNN code"""
+        X_test = self.X[test_idx]
+        X_train = self.X[train_idx]
+        y_test = self.y[test_idx]
+        y_train = self.y[train_idx]
+
+        if standard_scaler:
+            mu, sigma = self.standard_scaler(X_train)
+            X_train = (X_train - mu)/sigma
+            X_test = (X_test-mu)/sigma
+        
+        train_sq = np.sum(X_train**2, axis=1)
+        test_sq = np.sum(X_test**2, axis=1)
+
+        distance_matrix = train_sq[:, None] + test_sq[None, :] - 2 * X_train @ X_test.T
+        idx_knn = np.argpartition(distance_matrix, K, axis=0)[:K]
+        neighbors = y_train[idx_knn]
+        predicted = sp.stats.mode(neighbors, axis=0, keepdims=False).mode
+
+        return predicted, y_test
+
+    
 
 if __name__ == "__main__":
     data = load_data('dataset_3.csv')
