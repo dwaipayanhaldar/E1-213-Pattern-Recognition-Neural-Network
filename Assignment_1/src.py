@@ -588,7 +588,155 @@ class k_nearest_neighbour():
 
         return predicted, y_test
 
+
+#Problem 4.15
+class naive_bayes():
+
+    def __init__(self, data):
+        self.X = data[:,:-1].astype(np.float32)
+        self.y = data[:,-1]
+        zero_idx = (self.y == 0)
+        one_idx = (self.y == 1)
+        self.X0 = self.X[zero_idx]
+        self.X1 = self.X[one_idx]
+
+    def naive_bayes_log(self):
+        """Calculate the Naive Bayes with log probabilites"""
+        N = self.X.shape[0]
+        n0 = self.X0.shape[0]
+        n1 = self.X1.shape[0]
+
+        mu0 = np.mean(self.X0, axis = 0)
+        mu1 = np.mean(self.X1, axis = 0)
+
+        sigma0 = (n0/(n0-1))*np.var(self.X0, axis = 0)
+        sigma1 = (n1/(n1-1))*np.var(self.X1, axis = 0)
+        predicted = np.zeros_like(self.y)
+
+        for j in range(N):
+
+            logp0 = np.sum(-0.5*np.log(2*np.pi*sigma0) - ((self.X[j]-mu0)**2)/(2*sigma0)) + np.log(n0/N)
+            logp1 = np.sum(-0.5*np.log(2*np.pi*sigma1) - ((self.X[j]-mu1)**2)/(2*sigma1)) + np.log(n1/N)
+            predicted[j] = (logp1 > logp0)
+            if logp0 == 0.0 or logp1 == 0.0:
+                print("There is underflow!")
+
+        return predicted, self.y
     
+    def naive_bayes_raw(self):
+        """Returns the exact D for which the joint probability underflows"""
+        N = self.X.shape[0]
+        n0 = self.X0.shape[0]
+        n1 = self.X1.shape[0]
+
+        mu0 = np.mean(self.X0, axis=0, dtype=np.float32)
+        mu1 = np.mean(self.X1, axis=0, dtype=np.float32)
+
+        sigma0 = (n0/(n0-1))*np.var(self.X0, axis=0).astype(np.float32)
+        sigma1 = (n1/(n1-1))*np.var(self.X1, axis=0).astype(np.float32)
+
+        D_max = self.X.shape[1]
+
+        for D in range(1, D_max+1):
+
+            X_D = self.X[:, :D]
+
+            joint0 = np.ones(N, dtype=np.float32)
+            joint1 = np.ones(N, dtype=np.float32)
+
+            for d in range(D):
+
+                p0 = (np.float32(1.0) / np.sqrt(np.float32(2*np.pi) * sigma0[d])) * \
+     np.exp(-((X_D[:,d] - mu0[d])**2) / (np.float32(2.0) * sigma0[d])).astype(np.float32)
+
+                p1 = (np.float32(1.0) / np.sqrt(np.float32(2*np.pi) * sigma1[d])) * \
+     np.exp(-((X_D[:,d] - mu1[d])**2) / (np.float32(2.0) * sigma1[d])).astype(np.float32)
+
+                joint0 *= p0
+                joint1 *= p1
+
+            joint0 *= (n0/N)
+            joint1 *= (n1/N)
+
+            if np.any(joint0 == 0.0) or np.any(joint1 == 0.0):
+                print(f"Underflow occurs at D = {D}")
+                return D
+            
+        print(np.min(joint0), np.min(joint1))
+        print("No underflow detected")
+        return None
+
+#Problem 5.16
+class empirical_bias_variance():
+
+    def __init__(self, data):
+        self.X = data[:,0]
+        self.y = data[:,-1]
+    
+    def ordinary_least_squares(self, X, y):
+        """Solve the OLS problem using the normal equations"""
+        Y = X.T @ y
+        w = np.linalg.inv(X.T@X)@Y
+        return w
+    
+    def bootstrap(self, X, y, number_of_samples=100):
+        """Make 100 bootstrap samples of paired (X, y)"""
+        N = len(X)
+        X_bootstrap = np.zeros((N, number_of_samples))
+        y_bootstrap = np.zeros((N, number_of_samples))
+        for i in range(number_of_samples):
+            idx = np.random.choice(N, size=N, replace=True)
+            X_bootstrap[:, i] = X[idx]
+            y_bootstrap[:, i] = y[idx]
+        return X_bootstrap, y_bootstrap
+
+    def make_X(self, X_col, d):
+        X = X_col.reshape(-1, 1)
+        ones = np.ones((X.shape[0], 1))
+        X = np.hstack((ones, X))
+        if d == 15:
+            for i in range(2, d+1):
+                X = np.hstack((X, X_col.reshape(-1,1)**i))
+        return X
+    
+    def l2_regression(self, X, y, lambdaa):
+        """Solve the L2 regression problem from normal equation"""
+        Y = X.T @ y
+        w = np.linalg.inv(X.T @ X + lambdaa * np.eye(X.shape[1])) @ Y
+        return w
+
+    def empirical_bias_variance(self, train_idx, test_idx, number_of_samples=100):
+        """Calculates the Bias variance for 100 bootstrap samples of 2 different models"""
+        X_test = self.X[test_idx]
+        X_train = self.X[train_idx]
+        y_test = self.y[test_idx]
+        y_train = self.y[train_idx]
+
+        X_bootstrap, y_bootstrap = self.bootstrap(X_train, y_train, number_of_samples)
+        weights_1 = np.zeros((number_of_samples, 2))
+        weights_15 = np.zeros((number_of_samples, 16))
+
+        for i in range(number_of_samples):
+            X1 = self.make_X(X_bootstrap[:, i], d=1)
+            weights_1[i, :] = self.ordinary_least_squares(X1, y_bootstrap[:, i])
+            X15 = self.make_X(X_bootstrap[:, i], d=15)
+            weights_15[i, :] = self.ordinary_least_squares(X15, y_bootstrap[:, i])
+
+        d1_predictions = self.make_X(X_test, d =1)@weights_1.T
+        d15_predictions = self.make_X(X_test, d =15)@weights_15.T
+
+        mean_pred_1 = np.mean(d1_predictions, axis=1)   
+        mean_pred_15 = np.mean(d15_predictions, axis=1) 
+
+        bias1 = np.mean((mean_pred_1 - y_test)**2)
+        bias15 = np.mean((mean_pred_15 - y_test)**2)
+
+        variance1 = np.mean(np.var(d1_predictions, axis=1)) 
+        variance15 = np.mean(np.var(d15_predictions, axis=1))
+
+        return weights_1, weights_15, bias1, bias15, variance1, variance15
+
+
 
 if __name__ == "__main__":
     data = load_data('dataset_3.csv')
