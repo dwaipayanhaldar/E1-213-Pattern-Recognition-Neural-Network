@@ -431,14 +431,14 @@ class soft_margin_classifier():
         else:
             return K
         
-    def hyperparameter_topography(self, C, sigma):
+    def hyperparameter_topography(self, C, sigma, train_idx, val_idx):
         X = self.X
         y = self.y
-        idx = np.random.randint(0,X.shape[0], size=int(0.8*X.shape[0]))
-        X_train = X[idx]
-        X_val = np.delete(X, idx, axis = 0)
-        y_train = y[idx]
-        y_val = np.delete(y,idx)
+        X_train = X[train_idx]
+        X_val = X[val_idx]
+
+        y_train = y[train_idx]
+        y_val = y[val_idx]
         K = self.rbf_kernel(sigma, X_train)
         Q = np.outer(y_train, y_train) * K  
     
@@ -478,6 +478,8 @@ class soft_margin_classifier():
 
         return training_accuracy, validation_accuracy
         
+#Problem 4.12
+
 
 
 if __name__ == "__main__":
