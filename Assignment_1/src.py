@@ -755,11 +755,6 @@ class frequentist_vs_bayesian():
         return np.hstack((np.ones((len(X_col), 1)), X_col.reshape(-1, 1)))
 
     def frequentist(self, train_idx, B=100):
-        """
-        Bootstrap B=100 OLS fits on training data.
-        Returns slope estimates, their mean and variance.
-        Frequentist 'expectation' = average over repeated datasets.
-        """
         X_train = self.X[train_idx]
         y_train = self.y[train_idx]
         N = len(X_train)
@@ -777,17 +772,6 @@ class frequentist_vs_bayesian():
         return slopes, freq_mean, freq_var
 
     def bayesian_map(self, train_idx, tau_sq=100.0):
-        """
-        Gaussian prior: w ~ N(0, tau²I)
-        Likelihood:     y ~ N(Xw, sigma²I),  sigma² estimated from OLS residuals
-
-        Posterior:      w | y ~ N(mu_post, Sigma_post)
-          Sigma_post = (X^T X / sigma² + I / tau²)^{-1}
-          mu_post    = Sigma_post @ X^T y / sigma²
-
-        Bayesian 'expectation' = average over the posterior given THIS dataset.
-        Returns MAP slope and posterior variance of slope.
-        """
         X_col   = self.X[train_idx]
         y_train = self.y[train_idx]
         X       = self.make_X(X_col)

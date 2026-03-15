@@ -1,10 +1,10 @@
-\documentclass[12pt,a4paper,onecolumn]{exam}
+\documentclass[11pt,a4paper,onecolumn]{exam}
 \usepackage{amsmath}
 \usepackage{amsthm}
 \usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{float}
-\usepackage{geometry}
+\usepackage[top=0.75in, bottom=0.75in, left=0.5in, right=0.5in]{geometry}
 \usepackage{tikz}
 \usepackage[skins]{tcolorbox}
 \usepackage{listings}
@@ -79,7 +79,7 @@ Ordinary least squares solution is implemented via the closed form solution $(X^
 
 \textbf{1.2 Primal to Dual Translation}
 \begin{solution}
-The target dataset is threshold by median to give a binary dataset. The data is not linearly separable. So hard margin SVM will not be able to fit in the data. I used \verb|scipy.optimize.minimize| to optimize, it is not able to converge and going on some infinite loop. Using \verb|cvxopt.solvers.qp| was able to solve the problem but all the mu was very large suggesting that all of them are support vectors which is clearly not the case. So they are all garbage values.
+The target dataset is threshold by median to give a binary dataset. The data is not linearly separable. So hard margin SVM will not be able to fit in the data. I used \verb|scipy.optimize.minimize| to optimize, it is not able to converge and going on some infinite loop. Using \verb|cvxopt.solvers.qp| was able to solve the problem but all the mu was very large suggesting that all of them are support vectors which is clearly not the case. All of these occurs as the optimization problem is not feasible. 
 %What is the optimization technique used in scipy and what is used in cvxopt. Check
 \end{solution}
 
@@ -93,6 +93,12 @@ Since $D>N$, so the rank of the matrix can be at best $N$ and $X^TX$ is a $1000\
 \textbf{2.4 Lasso Sparsity}
 \begin{solution}
 Fig. \ref{fig:2_4} shows the variation of the $l_1$ norm of weight value with $log(\lambda)$. The exact value of $\lambda$ for which exactly $50\%$ is equal to $0$ is $0.37$. 
+\end{solution}
+
+\questionheader{Phase 3: High Frequency ICU Telemetry}
+\textbf{3.5 Vectorized Logistic Regression}
+\begin{solution}
+The Lipschitz smoothness factor for this case is very small $\frac{1}{L} = 0.003396$. So even when 2 or 3 times the factor is taken, the curve converges as the absolute value of the $\alpha$ is small. Only when very high value is taken then the curve does not converge. Fig. \ref{fig:3_5a} gives the loss curve for a $\alpha$ that is close to the factor and Fig. \ref{fig:3_5b} gives the loss curve for a very high $\alpha$. 
 \end{solution}
 
 \begin{figure}[H]
@@ -112,12 +118,8 @@ Fig. \ref{fig:2_4} shows the variation of the $l_1$ norm of weight value with $l
 \end{subfigure}
 \end{figure}
 
-\questionheader{Phase 3: High Frequency ICU Telemetry}
 
-\textbf{3.5 Vectorized Logistic Regression}
-\begin{solution}
-The Lipschitz smoothness factor for this case is very small $\frac{1}{L} = 0.003396$. So even when 2 or 3 times the factor is taken, the curve converges as the absolute value of the $\alpha$ is small. Only when very high value is taken then the curve does not converge. Fig. \ref{fig:3_5a} gives the loss curve for a $\alpha$ that is close to the factor and Fig. \ref{fig:3_5b} gives the loss curve for a very high $\alpha$. 
-\end{solution}
+
 
 \begin{figure}[H]
 \centering
@@ -143,7 +145,7 @@ The initial log likelihood is -2857267.241 and after one iteration the log likel
 
 \textbf{3.7 EM Convergence and crashes}
 \begin{solution}
-Fig. \ref{fig:3_7a}, Fig. \ref{fig:3_7b} and Fig. \ref{fig:3_7c} gives the plots of Log-Likelihood vs Iteration for different values of K = 2,4 and 6. When one of the matrix is made singular, then the function cannot invert the matrix for the multivariate normal equation to work, so it cannot calculate the value of the function at that sample. So, the python breaks with error \verb|LinAlgError|. 
+Fig. \ref{fig:3_7a}, Fig. \ref{fig:3_7b} and Fig. \ref{fig:3_7c} gives the plots of Log-Likelihood vs Iteration for different values of K = 2,4 and 6. When the covariance matrix becomes singular, causing \verb|numpy.linalg.LinAlgError| during inversion in the multivariate normal PD. 
 \end{solution}
 \begin{figure}[H]
 \centering
@@ -177,37 +179,19 @@ Fig. \ref{fig:3_8} gives the plot of the decision boundary along with the Gaussi
 \textbf{3.9 SVM with Slack KKT Verification}
 
 \begin{solution}
-Index of point exactly on the margin 3374 and the value of mu for this is 0.0004879. Index of point classified safely outside the margin 8564 and the value of mu for this is $7.87 \times 10^{-13}$. No point classified outside the margin, i.e., there is 100\% training accuracy.
+Index of point exactly on the margin 3374 and the value of mu for this is 0.0004879. Index of point classified safely outside the margin 8564 and the value of mu for this is $7.87 \times 10^{-13}$. No point has a $\mu$ close to 1. Highest $\mu$ is in the range pf $10^{-4}$ So, we can safely conclude that there is no point inside the margin. 
 
 \end{solution}
 \textbf{3.10 Mercer's Condition}
 
 \begin{solution}
-The Kernel matrix satisfy the Mercer's condition. The highest and the lowest eigenvalue is near 1 for small $\lambda$ and when the $\lambda$ becomes high, the matrix is ill conditioned but the lowest eigen value is always greater than 0. 
+The Kernel matrix satisfy the Mercer's condition. The highest and the lowest eigenvalue is near 1 for small $\sigma$ and when the $\sigma$ becomes high, the matrix is ill conditioned but the lowest eigen value is always greater than 0. So, the matrix is PSD. 
 \end{solution}
 \textbf{3.11 Hyperparameter Topography}
 
 \begin{solution}
 Fig. \ref{fig:3_11} gives the heatmap of the search in the parameter space. Overfit occurs for all the $C \in \{1,10,100\}$ and $\sigma \in \{0.001,0.01,0.1,1\}$. Only $\sigma = 10$ is able to fit the data properly. 
 \end{solution}
-
-\questionheader{Phase 4: Unscaled Electronic Health Records}
-
-\textbf{4.12 Multiclass Extension \& Scaling}
-\begin{solution}
-The raw data does not converge at all the loss curve oscillates and the loop terminates at 2000 which is the max number of iterations preset. On the other hand, the scaled data converges in 1195 iterations where the tolerance is set to $10^{-6}$.  
-\end{solution}
-
-\textbf{4.12 Vectorization Benchmarking}
-\begin{solution}
-The total time of running the Naive KNN is 25.78 secs, while the vectorized KNN takes only 0.53 secs. That is amost 
-\end{solution}
-
-\textbf{4.12 Curse of Scale}
-\begin{solution}
-The raw data does not converge at all the loss curve oscillates and the loop terminates at 2000 which is the max number of iterations preset. On the other hand, the scaled data converges in 1195 iterations where the tolerance is set to $10^{-6}$.  
-\end{solution}
-
 
 \begin{figure}[H]
 \centering
@@ -226,4 +210,54 @@ The raw data does not converge at all the loss curve oscillates and the loop ter
 \end{subfigure}
 \end{figure}
 
+\questionheader{Phase 4: Unscaled Electronic Health Records}
+
+\textbf{4.12 Multiclass Extension \& Scaling}
+\begin{solution}
+The raw data does not converge at all the loss curve oscillates and the loop terminates at 2000 which is the max number of iterations preset. On the other hand, the scaled data converges in 1195 iterations where the tolerance is set to $10^{-6}$.  
+\end{solution}
+
+\textbf{4.13 Vectorization Benchmarking}
+\begin{solution}
+The total time of running the Naive KNN is 25.78 secs, while the vectorized KNN takes only 0.53 secs. That is almost $50\times$ faster. 
+\end{solution}
+
+\textbf{4.14 Curse of Scale}
+\begin{solution}
+The accuracy without the standard scalar is coming out to be 88.85\% while the accuracy with the standard scalar is coming out to be 91.65\%. Intuitively, that makes sense the unscaled data should give lower accuracy.  
+\end{solution}
+
+\textbf{4.15 Bayes optimal \& Underflow}
+\begin{solution}
+The Naive Bayes classifier with log conditional is implemented on the whole dataset and it gives an accuracy of 91.31\%. The underflow occurs at D=28 with \verb|float32|.
+\end{solution}
+
+\questionheader{Phase 5: Bias-Variance Decomposition}
+
+\textbf{5.16 Empirical Bias-Variance via Bootstrapping}
+
+\begin{solution}
+The bias of the $d = 1$ model and the $d = 15$ model are 2.33 and 2.31 respectively. While the variance is 0.001 and 0.01 respectively. This is expected the variance of the $d = 15$ model is higher while the bias is relatively less than $d=1$ model. That is expected since the former model tries to fit in perfectly. 
+\end{solution}
+
+\textbf{5.17 Frequentist vs. Bayesian Uncertainity}
+
+\begin{solution}
+The frequentist variance is 0.0011 and the analytical bayesian variance is 0.0014. Fig. \ref{fig:5_17} gives the plot of both the distributions. \\
+\textbf{Frequentist:} Expectation over repeated datasets $\mathcal{D}$:
+\[
+\mathbb{E}_{\mathcal{D}}\!\left[\hat{\theta}\right], \qquad \mathrm{Var}_{\mathcal{D}}\!\left[\hat{\theta}\right] = \mathbb{E}_{\mathcal{D}}\!\left[\left(\hat{\theta} - \mathbb{E}[\hat{\theta}]\right)^2\right]
+\]
+\textbf{Bayesian:} Expectation over the posterior $p(\theta \mid \mathcal{D})$:
+\[
+\mathbb{E}_{\theta \mid \mathcal{D}}\!\left[\theta\right] = \int \theta\, p(\theta \mid \mathcal{D})\, d\theta, \qquad \Sigma_{\text{post}} = \left(\frac{X^\top X}{\sigma^2} + \frac{I}{\tau^2}\right)^{-1}
+\]
+\end{solution}
+
+\begin{figure}[H]
+\centering
+\includegraphics[scale = 0.5]{P05_17.png}
+\caption{Distribution Function calculated analytically and with the frequentist approach}
+\label{fig:5_17}
+\end{figure}
 \end{document}
