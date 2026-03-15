@@ -174,17 +174,23 @@ class regression():
             w_old = w.copy()
 
             for j in range(d):
-                rho = X[:, j].T @ (r + X[:, j] * w[j])
-
-                if rho > lambdaa:
-                    w[j] = (rho - lambdaa) / z[j]
-                elif rho < -lambdaa:
-                    w[j] = (rho + lambdaa) / z[j]
+                rho = X[:, j] @ r + z[j] * w[j]
+                if j == 0:  # bias — no penalty
+                    w_new = rho / z[j]
                 else:
-                    w[j] = 0.0
+                    if rho > lambdaa:
+                        w_new = (rho - lambdaa) / z[j]
+                    elif rho < -lambdaa:
+                        w_new = (rho + lambdaa) / z[j]
+                    else:
+                        w_new = 0.0
+                r += X[:, j] * (w[j] - w_new)
+                w[j] = w_new
+
+                non_zero = np.count_nonzero(w[1:]) / (d - 1)  # exclude bias from count
+ 
 
             if np.linalg.norm(w - w_old) < tol:
-                print(f"Converged in {iteration+1} iterations")
                 break
 
         self.w = w
@@ -735,6 +741,72 @@ class empirical_bias_variance():
         variance15 = np.mean(np.var(d15_predictions, axis=1))
 
         return weights_1, weights_15, bias1, bias15, variance1, variance15
+    
+
+#Problem 5.17
+class frequentist_vs_bayesian():
+
+    def __init__(self, data):
+        self.X = data[:,0]
+        self.y = data[:,-1]
+
+    def make_X(self, X_col):
+        """Build [1, x] design matrix for d=1"""
+        return np.hstack((np.ones((len(X_col), 1)), X_col.reshape(-1, 1)))
+
+    def frequentist(self, train_idx, B=100):
+        """
+        Bootstrap B=100 OLS fits on training data.
+        Returns slope estimates, their mean and variance.
+        Frequentist 'expectation' = average over repeated datasets.
+        """
+        X_train = self.X[train_idx]
+        y_train = self.y[train_idx]
+        N = len(X_train)
+        slopes = np.zeros(B)
+
+        for b in range(B):
+            idx = np.random.choice(N, size=N, replace=True)
+            Xb = self.make_X(X_train[idx])
+            yb = y_train[idx]
+            w = np.linalg.inv(Xb.T @ Xb) @ (Xb.T @ yb)
+            slopes[b] = w[1]
+
+        freq_mean = np.mean(slopes)
+        freq_var  = np.var(slopes)
+        return slopes, freq_mean, freq_var
+
+    def bayesian_map(self, train_idx, tau_sq=100.0):
+        """
+        Gaussian prior: w ~ N(0, tau²I)
+        Likelihood:     y ~ N(Xw, sigma²I),  sigma² estimated from OLS residuals
+
+        Posterior:      w | y ~ N(mu_post, Sigma_post)
+          Sigma_post = (X^T X / sigma² + I / tau²)^{-1}
+          mu_post    = Sigma_post @ X^T y / sigma²
+
+        Bayesian 'expectation' = average over the posterior given THIS dataset.
+        Returns MAP slope and posterior variance of slope.
+        """
+        X_col   = self.X[train_idx]
+        y_train = self.y[train_idx]
+        X       = self.make_X(X_col)
+        N, d    = X.shape
+
+        # estimate noise variance from OLS residuals
+        w_ols    = np.linalg.inv(X.T @ X) @ (X.T @ y_train)
+        sigma_sq = np.sum((y_train - X @ w_ols) ** 2) / (N - d)
+
+        # posterior
+        Sigma_post     = np.linalg.inv(X.T @ X / sigma_sq + np.eye(d) / tau_sq)
+        mu_post        = Sigma_post @ X.T @ y_train / sigma_sq
+        map_slope      = mu_post[1]
+        post_var_slope = Sigma_post[1, 1]
+
+        return map_slope, post_var_slope
+
+
+
 
 
 
