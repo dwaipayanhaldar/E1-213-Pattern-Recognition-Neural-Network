@@ -779,6 +779,18 @@ class PlantVillageDatasetViT(Dataset):
 # Phase 6 #
 #################################################
 
+
+class focal_loss(nn.Module):
+    """Focal loss for multi-class classification."""
+    def __init__(self, gamma=2):
+        super().__init__()
+        self.gamma = gamma
+
+    def forward(self, pred, target):
+        ce_loss = nn.CrossEntropyLoss(reduction='none')(pred, target)
+        p_t = torch.exp(-ce_loss)
+        return ((1 - p_t) ** self.gamma * ce_loss).mean()
+
 def train_loop_val_loss(train_dataloader, val_dataloader, model, loss_fn, optimizer, max_iter=100, patience=10):
     """
     Basic training Loop, Applicable for those applications that require the history of validation loss
